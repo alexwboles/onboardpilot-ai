@@ -76,3 +76,8 @@ button.btn.danger { background: #fee2e2; color: var(--red); }
 .welcome-box { background: var(--accent-soft); border-radius: 8px; padding: 14px; margin-top: 12px; }
 .list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .list-item:last-child { border-bottom: none; }
+
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

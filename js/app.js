@@ -58,7 +58,7 @@
       return;
     }
     const cards = rows.map(r => {
-      const badges = (r.overdue ? `<span class="badge overdue">⚠ Day-1 items overdue</span>` : "") +
+      const badges = (r.overdue ? `<span class="badge overdue">Day-1 items overdue</span>` : "") +
         (r.progress.overall === 100 ? `<span class="badge done">✓ Complete</span>` : "");
       return `<div class="card hire-card" data-hire="${r.id}">
         <h3>${esc(r.name)}</h3>
@@ -130,7 +130,7 @@
       } else {
         result = OP.draftWelcomeMessage(state, hire.id);
       }
-      out.innerHTML = `<div class="welcome-box"><strong>${result.source === "ai" ? "🤖 AI welcome" : "📝 Template welcome"}:</strong><br>${esc(result.message)}</div>`;
+      out.innerHTML = `<div class="welcome-box"><strong>${result.source === "ai" ? "AI welcome" : "Template welcome"}:</strong><br>${esc(result.message)}</div>`;
     });
   }
 

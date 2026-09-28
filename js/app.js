@@ -57,14 +57,18 @@
         <p class="muted">No hires yet. Add your first new hire to generate their onboarding checklist.</p></div>`;
       return;
     }
-    const cards = rows.map(r => {
+    const cards = rows.map((r, i) => {
       const badges = (r.overdue ? `<span class="badge overdue">Day-1 items overdue</span>` : "") +
         (r.progress.overall === 100 ? `<span class="badge done">✓ Complete</span>` : "");
-      return `<div class="card hire-card" data-hire="${r.id}">
-        <h3>${esc(r.name)}</h3>
-        <div class="small muted">${esc(r.role)} · started ${esc(r.startDate || "—")} · buddy: ${esc(r.buddy || "—")}</div>
-        <div class="bar"><div style="width:${r.progress.overall}%"></div></div>
-        <div class="small">Overall <strong>${r.progress.overall}%</strong> ${badges}</div>
+      const initial = esc((r.name || "?").trim().charAt(0).toUpperCase());
+      return `<div class="card hire-card" data-hire="${r.id}" style="animation-delay:${Math.min(i * 50, 300)}ms">
+        <div class="bp-stub"><div class="bp-avatar">${initial}</div><div class="bp-name">${esc(r.name)}</div></div>
+        <div class="bp-body">
+          <h3>${esc(r.role)}</h3>
+          <div class="small muted">started ${esc(r.startDate || "—")} · buddy: ${esc(r.buddy || "—")}</div>
+          <div class="bar"><div style="width:${r.progress.overall}%"></div></div>
+          <div class="bp-status"><span class="small">Overall <strong>${r.progress.overall}%</strong></span> ${badges}</div>
+        </div>
       </div>`;
     }).join("");
     v.innerHTML = `<div class="card"><h2>Dashboard</h2>
@@ -81,7 +85,26 @@
     if (!d) return;
     const hire = OP.getHire(state, selectedHireId);
     if (!hire) { d.innerHTML = ""; return; }
-    let html = `<div class="card"><h2>${esc(hire.name)} <span class="small muted">${esc(hire.role)}</span></h2>
+    const overall = OP.progressFor ? OP.progressFor(hire) : null;
+    const phases = OP.PHASES.map(ph => {
+      const c = OP.countsFor(hire, ph);
+      return { ph, label: OP.PHASE_LABELS[ph], done: c.done, total: c.total, pct: OP.progressFor(hire, ph) };
+    });
+    const firstOpen = phases.findIndex(p => p.pct < 100);
+    const stations = phases.map((p, i) =>
+      `<div class="station ${p.pct === 100 ? "done" : i === firstOpen ? "now" : ""}">
+        <span class="pin" aria-hidden="true"></span>
+        <div class="s-label">${esc(p.label)}</div>
+        <div class="s-count">${p.done}/${p.total}</div>
+      </div>`).join("");
+    const initial = esc((hire.name || "?").trim().charAt(0).toUpperCase());
+    let html = `<div class="card">
+      <div class="detail-head">
+        <div class="detail-avatar" aria-hidden="true">${initial}</div>
+        <div><h2>${esc(hire.name)}</h2><div class="small muted">${esc(hire.role)} · started ${esc(hire.startDate || "—")}</div></div>
+        ${overall !== null ? `<div class="detail-progress"><div class="small muted">Journey progress · <strong>${overall}%</strong></div><div class="bar"><div style="width:${overall}%"></div></div></div>` : ""}
+      </div>
+      <div class="journey" aria-label="Onboarding journey">${stations}</div>
       <div class="form-row">
         <label class="small">Buddy:
           <select id="detailBuddy">${buddyOptions(hire.buddyId)}</select>

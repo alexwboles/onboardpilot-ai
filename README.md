@@ -6,7 +6,10 @@ Employee onboarding checklists for small businesses. Pick a role, add a new hire
 
 - **Role-based checklists** — 6 built-in role templates (Retail Associate, Line Cook, Barista, Front Desk, Warehouse Associate, Office Admin). Each generates a checklist across three phases: **Day 1**, **Week 1**, and **Day 30**, with task categories (Paperwork / Training / Culture / Tools) and owner hints (Manager / Buddy / New hire).
 - **Generic document checklist** — every Day-1 template includes document items: government ID, tax withholding form (labeled e.g. W-4 in the US), direct deposit / payroll form, and emergency contact details.
-- **Per-hire progress tracking** — each hire gets their own checklist instance. Completion % is computed overall and per phase. The dashboard lists all hires with progress bars, flags **overdue Day-1 items** (past the hire's start date), and offers a per-hire detail view.
+- **Per-hire progress tracking** — each hire gets their own checklist instance. Completion % is computed overall and per phase. The dashboard lists all hires with progress bars, flags **overdue Day-1 items** (past the hire's start date), shows a **start-date countdown** ("starts in 7 days" / "started 2 days ago"), and offers a per-hire detail view.
+- **Dashboard search + sort** — find hires by name or role; sort by name, start date, progress, or overdue-first.
+- **Hire archiving** — archive finished hires off the dashboard (restorable), instead of deleting them.
+- **CSV export** — download the hire roster (name, role, start date, buddy, progress %, overdue, countdown) for HR reports.
 - **Buddy / mentor assignment** — keep a buddy list (name + role), assign one buddy per hire; the buddy shows on the hire's dashboard.
 - **Custom roles & tasks** — create your own roles with your own tasks per phase, all stored locally.
 - **Draft welcome message** — one click drafts a welcome note for a hire. Works out of the box with a local template; if you save an OpenAI API key in Settings, it uses the OpenAI API instead (optional, never required).
@@ -26,8 +29,8 @@ All data (hires, buddies, custom roles, settings) stays in **this browser's loca
 ## Tests
 
 ```bash
-bash test/smoke.sh   # 15 checks: files, syntax, logic assertions
-bash test/e2e.sh     # 6 end-to-end flows (Node, no network)
+bash test/smoke.sh   # 18 checks: files, syntax, logic assertions
+bash test/e2e.sh     # 10 end-to-end flows (Node, no network)
 ```
 
 ## Disclaimer — document checklist

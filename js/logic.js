@@ -214,6 +214,7 @@
       startDate: startDate || null, // ISO yyyy-mm-dd
       buddyId: buddyId || null,
       checklist: checklist,
+      archived: false,
       createdAt: new Date().toISOString()
     };
     state.hires.push(h);
@@ -273,16 +274,105 @@
     return hire.checklist.some(t => t.phase === "day1" && !t.done);
   }
 
+  function parseISODate(s) {
+    const d = new Date(s + "T12:00:00");
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // Whole days until the hire's start date (negative = already started). null = no start date.
+  function daysToStart(hire, todayStr) {
+    if (!hire || !hire.startDate) return null;
+    const today = todayStr || new Date().toISOString().slice(0, 10);
+    const a = parseISODate(today), b = parseISODate(hire.startDate);
+    if (!a || !b) return null;
+    return Math.round((b - a) / 86400000);
+  }
+
+  function startLabel(hire, todayStr) {
+    const d = daysToStart(hire, todayStr);
+    if (d === null) return "no start date";
+    if (d === 0) return "starts today";
+    if (d === 1) return "starts tomorrow";
+    if (d > 1) return "starts in " + d + " days";
+    if (d === -1) return "started yesterday";
+    return "started " + Math.abs(d) + " days ago";
+  }
+
   function dashboard(state, todayStr) {
-    return state.hires.map(h => ({
+    return state.hires.filter(h => !h.archived).map(h => ({
       id: h.id,
       name: h.name,
       role: h.role,
       startDate: h.startDate,
       buddy: getBuddyName(state, h.id),
       progress: progressAll(h),
-      overdue: isOverdue(h, todayStr)
+      overdue: isOverdue(h, todayStr),
+      startIn: daysToStart(h, todayStr)
     }));
+  }
+
+  function archivedHires(state) {
+    return (state.hires || []).filter(h => h.archived);
+  }
+  function archiveHire(state, hireId) {
+    const h = getHire(state, hireId);
+    if (!h) return false;
+    h.archived = true;
+    return true;
+  }
+  function unarchiveHire(state, hireId) {
+    const h = getHire(state, hireId);
+    if (!h) return false;
+    h.archived = false;
+    return true;
+  }
+
+  // Filter dashboard rows by name/role query (case-insensitive).
+  function searchHires(rows, query) {
+    const q = (query || "").trim().toLowerCase();
+    if (!q) return (rows || []).slice();
+    return (rows || []).filter(r => (r.name + " " + r.role).toLowerCase().includes(q));
+  }
+
+  // Sort dashboard rows. key: name | startDate | progress | overdue. overdue always first when key=overdue.
+  function sortHires(rows, key, dir) {
+    const d = dir === "desc" ? -1 : 1;
+    const arr = (rows || []).slice();
+    const val = r => {
+      if (key === "startDate") return r.startDate || "";
+      if (key === "progress") return r.progress ? r.progress.overall : 0;
+      if (key === "overdue") return r.overdue ? 1 : 0;
+      return (r.name || "").toLowerCase();
+    };
+    arr.sort((a, b) => {
+      const va = val(a), vb = val(b);
+      if (va < vb) return -1 * d;
+      if (va > vb) return 1 * d;
+      return 0;
+    });
+    return arr;
+  }
+
+  function csvCell(v) {
+    const s = String(v === undefined || v === null ? "" : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  // Dashboard rows -> CSV for HR reports.
+  function hiresToCSV(rows) {
+    const head = ["Name", "Role", "Start date", "Buddy", "Overall %", "Day-1 overdue", "Start countdown"];
+    const lines = (rows || []).map(r => [
+      r.name, r.role, r.startDate || "", r.buddy || "",
+      r.progress ? r.progress.overall : 0,
+      r.overdue ? "yes" : "no",
+      startInLabel(r)
+    ]);
+    return [head].concat(lines).map(l => l.map(csvCell).join(",")).join("\n");
+  }
+  function startInLabel(r) {
+    if (r.startIn === null || r.startIn === undefined) return "";
+    if (r.startIn === 0) return "today";
+    return r.startIn > 0 ? "in " + r.startIn + "d" : Math.abs(r.startIn) + "d ago";
   }
 
   // ---- Custom roles -------------------------------------------------------------
@@ -360,6 +450,8 @@
     addBuddy, removeBuddy,
     addHire, getHire, removeHire, setItemDone, assignBuddy, getBuddyName,
     progressFor, progressAll, countsFor, isOverdue, dashboard,
+    daysToStart, startLabel, searchHires, sortHires, hiresToCSV,
+    archiveHire, unarchiveHire, archivedHires,
     createCustomRole, addCustomTask, removeCustomRole, allRoles,
     localWelcomeMessage, draftWelcomeMessage, openaiWelcomeMessage
   };

@@ -128,6 +128,50 @@ if (s2.hires.length !== 1 || s2.buddies.length !== 1 || s2.hires[0].checklist.le
 console.log('ok');
 " | grep -q ok; then ok "serialize/deserialize round-trip"; else bad "serialize/deserialize round-trip"; fi
 
+if run "
+const OP = require('$LOGIC');
+['daysToStart','startLabel','searchHires','sortHires','hiresToCSV','archiveHire','unarchiveHire','archivedHires'].forEach(f => {
+  if (typeof OP[f] !== 'function') { console.error('missing export: ' + f); process.exit(1); }
+});
+const st = OP.blankState();
+const h = OP.addHire(st, 'T', 'Barista', '2026-10-05', null);
+if (OP.daysToStart(h, '2026-09-28') !== 7) { console.error('daysToStart wrong'); process.exit(1); }
+if (OP.daysToStart(h, '2026-10-06') !== -1) { console.error('past daysToStart wrong'); process.exit(1); }
+if (OP.startLabel(h, '2026-09-28') !== 'starts in 7 days') { console.error('startLabel wrong: ' + OP.startLabel(h, '2026-09-28')); process.exit(1); }
+if (OP.daysToStart(OP.addHire(st, 'NoDate', 'Barista', '', null), '2026-09-28') !== null) { console.error('no-date should be null'); process.exit(1); }
+console.log('ok');
+" | grep -q ok; then ok "start-date countdown math"; else bad "start-date countdown math"; fi
+
+if run "
+const OP = require('$LOGIC');
+const st = OP.blankState();
+OP.addHire(st, 'Zoe Park', 'Barista', '2026-09-28', null);
+OP.addHire(st, 'Amy Chen', 'Line Cook', '2026-10-05', null);
+const rows = OP.dashboard(st, '2026-09-28');
+if (OP.searchHires(rows, 'zoe').length !== 1) { console.error('name search failed'); process.exit(1); }
+if (OP.searchHires(rows, 'line cook').length !== 1) { console.error('role search failed'); process.exit(1); }
+if (OP.searchHires(rows, '').length !== 2) { console.error('empty query should return all'); process.exit(1); }
+const sorted = OP.sortHires(rows, 'name', 'asc');
+if (sorted[0].name !== 'Amy Chen') { console.error('sort by name failed'); process.exit(1); }
+const csv = OP.hiresToCSV(rows).split('\n');
+if (csv[0] !== 'Name,Role,Start date,Buddy,Overall %,Day-1 overdue,Start countdown') { console.error('csv header: ' + csv[0]); process.exit(1); }
+if (csv.length !== 3) { console.error('csv rows: ' + csv.length); process.exit(1); }
+console.log('ok');
+" | grep -q ok; then ok "dashboard search + sort + CSV export"; else bad "dashboard search + sort + CSV export"; fi
+
+if run "
+const OP = require('$LOGIC');
+const st = OP.blankState();
+const h = OP.addHire(st, 'Archie', 'Barista', '2026-09-28', null);
+if (OP.dashboard(st, '2026-09-28').length !== 1) { console.error('should be 1'); process.exit(1); }
+OP.archiveHire(st, h.id);
+if (OP.dashboard(st, '2026-09-28').length !== 0) { console.error('archived hire still on dashboard'); process.exit(1); }
+if (OP.archivedHires(st).length !== 1) { console.error('archived list wrong'); process.exit(1); }
+OP.unarchiveHire(st, h.id);
+if (OP.dashboard(st, '2026-09-28').length !== 1) { console.error('restore failed'); process.exit(1); }
+console.log('ok');
+" | grep -q ok; then ok "hire archive + restore"; else bad "hire archive + restore"; fi
+
 echo ""
 echo "smoke: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

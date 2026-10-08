@@ -103,6 +103,67 @@ if (!st2.customRoles['Custom'] || st2.settings.openaiKey !== 'sk-test') process.
 console.log('ok');
 "
 
+# 7. Start-date countdown labels
+flow "start-date countdown labels" "
+const OP = require('$LOGIC');
+const st = OP.blankState();
+const h = OP.addHire(st, 'Countdown Cal', 'Barista', '2026-10-10', null);
+if (OP.startLabel(h, '2026-09-28') !== 'starts in 12 days') process.exit(1);
+if (OP.startLabel(h, '2026-10-10') !== 'starts today') process.exit(1);
+if (OP.startLabel(h, '2026-10-11') !== 'started yesterday') process.exit(1);
+if (OP.startLabel(h, '2026-10-20') !== 'started 10 days ago') process.exit(1);
+const dash = OP.dashboard(st, '2026-09-28');
+if (dash.find(r => r.id === h.id).startIn !== 12) process.exit(1);
+console.log('ok');
+"
+
+# 8. Search + sort dashboard
+flow "dashboard search and sort" "
+const OP = require('$LOGIC');
+const st = OP.blankState();
+OP.addHire(st, 'Zoe Park', 'Barista', '2026-09-28', null);
+const h2 = OP.addHire(st, 'Amy Chen', 'Line Cook', '2026-10-05', null);
+const rows = OP.dashboard(st, '2026-09-28');
+if (OP.searchHires(rows, 'CHEN').length !== 1) process.exit(1);
+const byStart = OP.sortHires(rows, 'startDate', 'asc');
+if (byStart[0].name !== 'Zoe Park') process.exit(1);
+// finish all of Zoe's tasks -> she should sort first by progress desc
+rows.forEach(r => { const h = OP.getHire(st, r.id); h.checklist.forEach(t => OP.setItemDone(st, h.id, t.id, true)); });
+const fresh = OP.dashboard(st, '2026-09-28');
+const byProg = OP.sortHires(fresh, 'progress', 'desc');
+if (byProg[0].progress.overall !== 100) process.exit(1);
+console.log('ok');
+"
+
+# 9. CSV export content
+flow "hires CSV export content" "
+const OP = require('$LOGIC');
+const st = OP.blankState();
+const b = OP.addBuddy(st, 'Mentor', 'Lead');
+OP.addHire(st, 'Csv Sam', 'Barista', '2026-09-28', b.id);
+const rows = OP.dashboard(st, '2026-09-28');
+const csv = OP.hiresToCSV(rows);
+if (csv.split('\n').length !== 2) process.exit(1);
+if (!csv.includes('Csv Sam') || !csv.includes('Mentor') || !csv.includes('Barista')) process.exit(1);
+console.log('ok');
+"
+
+# 10. Archive lifecycle
+flow "archive lifecycle" "
+const OP = require('$LOGIC');
+const st = OP.blankState();
+const h = OP.addHire(st, 'Gone Girl', 'Barista', '2026-09-28', null);
+OP.archiveHire(st, h.id);
+if (OP.dashboard(st, '2026-09-28').some(r => r.id === h.id)) process.exit(1);
+if (!OP.archivedHires(st).some(x => x.id === h.id)) process.exit(1);
+// serialize round-trips the archived flag
+const st2 = OP.deserialize(OP.serialize(st));
+if (!OP.archivedHires(st2).some(x => x.id === h.id)) process.exit(1);
+OP.unarchiveHire(st, h.id);
+if (!OP.dashboard(st, '2026-09-28').some(r => r.id === h.id)) process.exit(1);
+console.log('ok');
+"
+
 echo ""
 echo "e2e: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -16,6 +16,8 @@
   }
   let state = load();
   let selectedHireId = null;
+  let dashQuery = "";
+  let dashSort = "name";
 
   // ---- helpers ----
   function el(id) { return document.getElementById(id); }
@@ -51,33 +53,68 @@
   // ---- views ----
   function renderDashboard() {
     const v = el("view-dashboard");
-    const rows = OP.dashboard(state);
-    if (!rows.length) {
-      v.innerHTML = `<div class="card"><h2>Dashboard</h2>
-        <p class="muted">No hires yet. Add your first new hire to generate their onboarding checklist.</p></div>`;
+    const all = OP.dashboard(state);
+    const rows = OP.sortHires(OP.searchHires(all, dashQuery), dashSort, dashSort === "progress" ? "desc" : "asc");
+    const archived = OP.archivedHires(state);
+    const toolbar = `<div class="card"><h2>Dashboard</h2>
+      <div class="form-row">
+        <input id="dashSearch" placeholder="Search hires by name or role…" value="${esc(dashQuery)}" style="min-width:220px">
+        <label class="small">Sort by
+          <select id="dashSort" style="flex:none">
+            ${[["name", "Name"], ["startDate", "Start date"], ["progress", "Progress"], ["overdue", "Overdue first"]].map(o =>
+              `<option value="${o[0]}"${dashSort === o[0] ? " selected" : ""}>${o[1]}</option>`).join("")}
+          </select>
+        </label>
+        <button class="btn ghost" id="csvBtn">Export CSV</button>
+      </div>
+      <p class="muted small">${all.length} active hire(s)${dashQuery ? ` · filtered to ${rows.length}` : ""}.</p></div>`;
+    if (!rows.length && !archived.length) {
+      v.innerHTML = toolbar + `<div class="card"><p class="muted">${dashQuery ? "No hires match that search." : "No hires yet. Add your first new hire to generate their onboarding checklist."}</p></div>`;
+      wireDashToolbar();
       return;
     }
     const cards = rows.map((r, i) => {
       const badges = (r.overdue ? `<span class="badge overdue">Day-1 items overdue</span>` : "") +
         (r.progress.overall === 100 ? `<span class="badge done">✓ Complete</span>` : "");
       const initial = esc((r.name || "?").trim().charAt(0).toUpperCase());
+      const hire = OP.getHire(state, r.id);
+      const start = hire ? OP.startLabel(hire) : "";
       return `<div class="card hire-card" data-hire="${r.id}" style="animation-delay:${Math.min(i * 50, 300)}ms">
         <div class="bp-stub"><div class="bp-avatar">${initial}</div><div class="bp-name">${esc(r.name)}</div></div>
         <div class="bp-body">
           <h3>${esc(r.role)}</h3>
-          <div class="small muted">started ${esc(r.startDate || "—")} · buddy: ${esc(r.buddy || "—")}</div>
+          <div class="small muted">started ${esc(r.startDate || "—")} · ${esc(start)} · buddy: ${esc(r.buddy || "—")}</div>
           <div class="bar"><div style="width:${r.progress.overall}%"></div></div>
           <div class="bp-status"><span class="small">Overall <strong>${r.progress.overall}%</strong></span> ${badges}</div>
         </div>
       </div>`;
     }).join("");
-    v.innerHTML = `<div class="card"><h2>Dashboard</h2>
-      <p class="muted small">${rows.length} hire(s). Click a card to open their checklist.</p></div>
-      <div class="grid">${cards}</div>
-      <div id="hireDetail"></div>`;
+    v.innerHTML = toolbar + `<div class="grid">${cards}</div>` +
+      (archived.length ? `<div class="card"><h3>Archived (${archived.length})</h3>` +
+        archived.map(h => `<div class="list-item"><span><strong>${esc(h.name)}</strong> <span class="muted small">${esc(h.role)}</span></span>
+          <button class="btn ghost" data-unarchive="${h.id}">Restore</button></div>`).join("") + `</div>` : "") +
+      `<div id="hireDetail"></div>`;
+    wireDashToolbar();
     v.querySelectorAll(".hire-card").forEach(c =>
       c.addEventListener("click", () => { selectedHireId = c.dataset.hire; renderHireDetail(); }));
+    v.querySelectorAll("[data-unarchive]").forEach(b =>
+      b.addEventListener("click", (e) => { e.stopPropagation(); OP.unarchiveHire(state, b.dataset.unarchive); save(); renderDashboard(); }));
     if (selectedHireId) renderHireDetail();
+  }
+
+  function wireDashToolbar() {
+    const s = el("dashSearch");
+    if (s) s.addEventListener("input", () => { dashQuery = s.value; clearTimeout(s._t); s._t = setTimeout(renderDashboard, 220); });
+    const so = el("dashSort");
+    if (so) so.addEventListener("change", () => { dashSort = so.value; renderDashboard(); });
+    const cb = el("csvBtn");
+    if (cb) cb.addEventListener("click", () => {
+      const rows = OP.sortHires(OP.searchHires(OP.dashboard(state), dashQuery), dashSort, dashSort === "progress" ? "desc" : "asc");
+      const blob = new Blob([OP.hiresToCSV(rows)], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = "onboardpilot-hires.csv"; a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    });
   }
 
   function renderHireDetail() {
@@ -110,6 +147,7 @@
           <select id="detailBuddy">${buddyOptions(hire.buddyId)}</select>
         </label>
         <button class="btn ghost" id="welcomeBtn">Draft welcome message</button>
+        <button class="btn ghost" id="archiveHireBtn">Archive hire</button>
         <button class="btn danger" id="deleteHireBtn">Remove hire</button>
       </div>
       <div id="welcomeOut"></div>`;
@@ -141,6 +179,9 @@
       if (confirm("Remove " + hire.name + "?")) {
         OP.removeHire(state, hire.id); selectedHireId = null; save(); render();
       }
+    });
+    el("archiveHireBtn").addEventListener("click", () => {
+      OP.archiveHire(state, hire.id); selectedHireId = null; save(); renderDashboard();
     });
     el("welcomeBtn").addEventListener("click", async () => {
       const out = el("welcomeOut");

@@ -79,11 +79,15 @@
       const initial = esc((r.name || "?").trim().charAt(0).toUpperCase());
       const hire = OP.getHire(state, r.id);
       const start = hire ? OP.startLabel(hire) : "";
+      const msLine = r.nextMilestone && r.nextMilestone.dueDate
+        ? `<div class="small milestone${r.nextMilestone.state === "overdue" ? " over" : ""}">${esc(OP.milestoneLabel(r.nextMilestone))}</div>`
+        : "";
       return `<div class="card hire-card" data-hire="${r.id}" style="animation-delay:${Math.min(i * 50, 300)}ms">
         <div class="bp-stub"><div class="bp-avatar">${initial}</div><div class="bp-name">${esc(r.name)}</div></div>
         <div class="bp-body">
           <h3>${esc(r.role)}</h3>
           <div class="small muted">started ${esc(r.startDate || "—")} · ${esc(start)} · buddy: ${esc(r.buddy || "—")}</div>
+          ${msLine}
           <div class="bar"><div style="width:${r.progress.overall}%"></div></div>
           <div class="bp-status"><span class="small">Overall <strong>${r.progress.overall}%</strong></span> ${badges}</div>
         </div>
@@ -147,6 +151,7 @@
           <select id="detailBuddy">${buddyOptions(hire.buddyId)}</select>
         </label>
         <button class="btn ghost" id="welcomeBtn">Draft welcome message</button>
+        <button class="btn ghost" id="printHireBtn">Print checklist</button>
         <button class="btn ghost" id="archiveHireBtn">Archive hire</button>
         <button class="btn danger" id="deleteHireBtn">Remove hire</button>
       </div>
@@ -164,6 +169,20 @@
       }
     }
     if (hasDoc) html = `<div class="doc-note"><strong>Document checklist note:</strong> items marked above are generic guidance only — not legal or tax advice. ${esc(OP.GENERIC_NOTE)}</div>` + html;
+    // manager notes journal
+    const notes = OP.hireNotes(state, hire.id);
+    html += `<div class="notes-sect print-notes">
+      <h3>Manager notes <span class="small muted">(${notes.length})</span></h3>
+      <div class="form-row note-add">
+        <input id="noteText" placeholder="Add a note — impression, concern, win…" maxlength="2000" style="flex:1">
+        <button class="btn ghost" id="addNoteBtn">Add note</button>
+      </div>
+      ${notes.length ? notes.slice().reverse().map(n => `
+        <div class="note-item"><div class="note-text">${esc(n.text)}</div>
+        <div class="note-meta"><span class="muted small">${esc(String(n.at).slice(0, 10))}</span>
+        <button class="btn ghost danger small" data-delnote="${n.id}">Delete</button></div></div>`).join("")
+        : `<p class="muted small">No notes yet — log first impressions, 1:1 takeaways, anything worth remembering.</p>`}
+    </div>`;
     html += `</div>`;
     d.innerHTML = html;
     d.querySelectorAll("input[type=checkbox]").forEach(cb =>
@@ -183,6 +202,21 @@
     el("archiveHireBtn").addEventListener("click", () => {
       OP.archiveHire(state, hire.id); selectedHireId = null; save(); renderDashboard();
     });
+    el("printHireBtn").addEventListener("click", () => {
+      document.body.classList.add("print-hire");
+      window.print();
+      setTimeout(() => document.body.classList.remove("print-hire"), 500);
+    });
+    el("addNoteBtn").addEventListener("click", () => {
+      const v = el("noteText").value;
+      if (!OP.addHireNote(state, hire.id, v)) { alert("Write the note first."); return; }
+      save(); renderHireDetail();
+    });
+    d.querySelectorAll("[data-delnote]").forEach(b =>
+      b.addEventListener("click", () => {
+        OP.removeHireNote(state, hire.id, b.dataset.delnote);
+        save(); renderHireDetail();
+      }));
     el("welcomeBtn").addEventListener("click", async () => {
       const out = el("welcomeOut");
       out.innerHTML = `<div class="welcome-box"><span class="muted">Drafting…</span></div>`;

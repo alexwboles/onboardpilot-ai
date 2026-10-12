@@ -172,6 +172,60 @@ if (OP.dashboard(st, '2026-09-28').length !== 1) { console.error('restore failed
 console.log('ok');
 " | grep -q ok; then ok "hire archive + restore"; else bad "hire archive + restore"; fi
 
+if run "
+const OP = require('$LOGIC');
+const st = OP.blankState();
+const h = OP.addHire(st, 'Nora', 'Barista', '2026-09-28', null);
+// notes: add, cap length, list, remove
+const n1 = OP.addHireNote(st, h.id, '  Great energy in the interview.  ');
+if (!n1 || !n1.id || !n1.at) { console.error('note shape'); process.exit(1); }
+if (OP.hireNotes(st, h.id).length !== 1) { console.error('note list'); process.exit(1); }
+if (OP.hireNotes(st, h.id)[0].text !== 'Great energy in the interview.') { console.error('note trim'); process.exit(1); }
+if (OP.addHireNote(st, h.id, '   ') !== null) { console.error('blank note should be null'); process.exit(1); }
+if (OP.addHireNote(st, 'nope', 'x') !== null) { console.error('note on missing hire should be null'); process.exit(1); }
+const long = OP.addHireNote(st, h.id, new Array(2500).join('x'));
+if (long.text.length !== 2000) { console.error('note not capped: ' + long.text.length); process.exit(1); }
+if (!OP.removeHireNote(st, h.id, n1.id)) { console.error('remove note failed'); process.exit(1); }
+if (OP.hireNotes(st, h.id).length !== 1) { console.error('note list after remove'); process.exit(1); }
+console.log('ok');
+" | grep -q ok; then ok "manager notes journal"; else bad "manager notes journal"; fi
+
+if run "
+const OP = require('$LOGIC');
+const st = OP.blankState();
+const h = OP.addHire(st, 'Nora', 'Barista', '2026-09-28', null);
+// phase due dates anchored on the start date
+if (OP.phaseDueDate(h, 'day1') !== '2026-09-29') { console.error('day1 due: ' + OP.phaseDueDate(h, 'day1')); process.exit(1); }
+if (OP.phaseDueDate(h, 'week1') !== '2026-10-05') { console.error('week1 due'); process.exit(1); }
+if (OP.phaseDueDate(h, 'day30') !== '2026-10-28') { console.error('day30 due'); process.exit(1); }
+if (OP.phaseDueDate({ startDate: '' }, 'day1') !== null) { console.error('no-date due should be null'); process.exit(1); }
+// milestone status: pending -> overdue -> done
+let ms = OP.milestoneStatus(h, '2026-09-27');
+if (ms[0].state !== 'pending' || ms[0].daysLeft !== 2) { console.error('pending ms: ' + JSON.stringify(ms[0])); process.exit(1); }
+ms = OP.milestoneStatus(h, '2026-10-01');
+if (ms[0].state !== 'overdue' || ms[0].daysLeft !== -2) { console.error('overdue ms: ' + JSON.stringify(ms[0])); process.exit(1); }
+if (OP.milestoneLabel(ms[0]) !== 'Day 1 overdue by 2 days') { console.error('label: ' + OP.milestoneLabel(ms[0])); process.exit(1); }
+if (OP.milestoneLabel({ label: 'Week 1', daysLeft: 1, dueDate: 'x' }) !== 'Week 1 due tomorrow') { console.error('tomorrow label'); process.exit(1); }
+if (OP.milestoneLabel({ label: 'Day 30', daysLeft: 0, dueDate: 'x' }) !== 'Day 30 due today') { console.error('today label'); process.exit(1); }
+// dashboard rows carry the next incomplete milestone
+const rows = OP.dashboard(st, '2026-09-27');
+if (!rows[0].nextMilestone || rows[0].nextMilestone.phase !== 'day1') { console.error('dash milestone'); process.exit(1); }
+// completing all day-1 items advances the milestone to week 1
+h.checklist.filter(t => t.phase === 'day1').forEach(t => OP.setItemDone(st, h.id, t.id, true));
+const rows2 = OP.dashboard(st, '2026-09-27');
+if (!rows2[0].nextMilestone || rows2[0].nextMilestone.phase !== 'week1') { console.error('milestone advance'); process.exit(1); }
+// upcomingMilestones across hires, soonest first, archived skipped
+const h2 = OP.addHire(st, 'Early Bird', 'Barista', '2026-09-20', null);
+OP.archiveHire(st, h2.id);
+const h3 = OP.addHire(st, 'Later', 'Barista', '2026-10-20', null);
+const up = OP.upcomingMilestones(st, '2026-09-27');
+if (up.length !== 2) { console.error('upcoming count: ' + up.length); process.exit(1); }
+if (up[0].hireName !== 'Nora' || up[1].hireName !== 'Later') { console.error('upcoming order'); process.exit(1); }
+console.log('ok');
+" | grep -q ok; then ok "phase milestone due dates"; else bad "phase milestone due dates"; fi
+
+if grep -q 'printHireBtn' js/app.js && grep -q 'print-hire' css/style.css && grep -q 'notes-sect' js/app.js && grep -q 'milestoneLabel' js/app.js; then ok "hire print + notes + milestone UI wired"; else bad "hire print + notes + milestone UI wired"; fi
+
 echo ""
 echo "smoke: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

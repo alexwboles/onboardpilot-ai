@@ -307,7 +307,8 @@
       buddy: getBuddyName(state, h.id),
       progress: progressAll(h),
       overdue: isOverdue(h, todayStr),
-      startIn: daysToStart(h, todayStr)
+      startIn: daysToStart(h, todayStr),
+      nextMilestone: nextMilestoneFor(h, todayStr)
     }));
   }
 
@@ -407,7 +408,88 @@
     return Object.keys(ROLE_TEMPLATES).concat(Object.keys(state.customRoles || {}));
   }
 
-  // ---- Welcome message ----------------------------------------------------------
+  // ---- Hire notes (manager journal) ---------------------------------------------------
+  // Timestamped free-text notes on a hire: interview impressions, concerns, wins.
+  function addHireNote(state, hireId, text) {
+    const h = getHire(state, hireId);
+    text = (text || "").trim();
+    if (!h || !text) return null;
+    const note = { id: uid("note"), at: new Date().toISOString(), text: text.slice(0, 2000) };
+    h.notes = h.notes || [];
+    h.notes.push(note);
+    return note;
+  }
+  function removeHireNote(state, hireId, noteId) {
+    const h = getHire(state, hireId);
+    if (!h || !h.notes) return false;
+    const before = h.notes.length;
+    h.notes = h.notes.filter(n => n.id !== noteId);
+    return h.notes.length < before;
+  }
+  function hireNotes(state, hireId) {
+    const h = getHire(state, hireId);
+    return h && h.notes ? h.notes.slice() : [];
+  }
+
+  // ---- Phase milestones ---------------------------------------------------------
+  // Each phase gets a due date anchored on the hire's start date:
+  // Day 1 -> start + 1 day, Week 1 -> start + 7 days, Day 30 -> start + 30 days.
+  const PHASE_DUE_OFFSETS = { day1: 1, week1: 7, day30: 30 };
+
+  function addDaysISO(iso, n) {
+    const d = parseISODate(iso);
+    if (!d) return null;
+    d.setDate(d.getDate() + n);
+    const p = x => String(x).padStart(2, "0");
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+  }
+
+  function phaseDueDate(hire, phase) {
+    if (!hire || !hire.startDate || !PHASE_DUE_OFFSETS[phase] && PHASE_DUE_OFFSETS[phase] !== 0) return null;
+    return addDaysISO(hire.startDate, PHASE_DUE_OFFSETS[phase] || 0);
+  }
+
+  // Status of every phase milestone for one hire: done / due-in / overdue.
+  function milestoneStatus(hire, todayStr) {
+    const today = todayStr || new Date().toISOString().slice(0, 10);
+    return PHASES.map(phase => {
+      const dueDate = phaseDueDate(hire, phase);
+      const complete = progressFor(hire, phase) === 100;
+      let daysLeft = null;
+      if (dueDate) {
+        const a = parseISODate(today), b = parseISODate(dueDate);
+        if (a && b) daysLeft = Math.round((b - a) / 86400000);
+      }
+      const state_ = complete ? "done" : (daysLeft !== null && daysLeft < 0 ? "overdue" : "pending");
+      return { phase, label: PHASE_LABELS[phase], dueDate, daysLeft, complete, state: state_ };
+    });
+  }
+
+  // The next incomplete milestone for a hire (or null when all phases are done).
+  function nextMilestoneFor(hire, todayStr) {
+    const ms = milestoneStatus(hire, todayStr);
+    return ms.find(m => !m.complete) || null;
+  }
+
+  // Across all active hires: incomplete milestones with a due date, soonest first.
+  function upcomingMilestones(state, todayStr) {
+    const out = [];
+    for (const h of (state.hires || [])) {
+      if (h.archived) continue;
+      const m = nextMilestoneFor(h, todayStr);
+      if (m && m.dueDate) out.push({ hireId: h.id, hireName: h.name, role: h.role, ...m });
+    }
+    out.sort((a, b) => (a.daysLeft || 0) - (b.daysLeft || 0));
+    return out;
+  }
+
+  function milestoneLabel(m) {
+    if (!m || !m.dueDate) return "";
+    if (m.daysLeft === 0) return m.label + " due today";
+    if (m.daysLeft === 1) return m.label + " due tomorrow";
+    if (m.daysLeft > 1) return m.label + " due in " + m.daysLeft + " days";
+    return m.label + " overdue by " + Math.abs(m.daysLeft) + " day" + (Math.abs(m.daysLeft) === 1 ? "" : "s");
+  }
   function localWelcomeMessage(hire, buddyName) {
     const parts = [
       "Welcome to the team, " + hire.name + "!",
@@ -444,7 +526,7 @@
 
   const OnboardPilot = {
     STORAGE_KEY, PHASES, PHASE_LABELS, CATEGORIES, GENERIC_NOTE,
-    ROLE_TEMPLATES,
+    ROLE_TEMPLATES, PHASE_DUE_OFFSETS,
     generateChecklist, buildTask,
     blankState, serialize, deserialize,
     addBuddy, removeBuddy,
@@ -452,6 +534,8 @@
     progressFor, progressAll, countsFor, isOverdue, dashboard,
     daysToStart, startLabel, searchHires, sortHires, hiresToCSV,
     archiveHire, unarchiveHire, archivedHires,
+    addHireNote, removeHireNote, hireNotes,
+    phaseDueDate, milestoneStatus, nextMilestoneFor, upcomingMilestones, milestoneLabel,
     createCustomRole, addCustomTask, removeCustomRole, allRoles,
     localWelcomeMessage, draftWelcomeMessage, openaiWelcomeMessage
   };

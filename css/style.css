@@ -209,3 +209,25 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   .journey { gap: .2rem; }
   .station { min-width: 110px; }
 }
+
+/* ---------- milestones + notes ---------- */
+.milestone{margin:.25rem 0 .1rem;color:var(--ink-soft);font-weight:600}
+.milestone.over{color:#a33;font-weight:700}
+.notes-sect{margin-top:1.4rem;border-top:1px solid var(--line);padding-top:1rem}
+.note-item{border:1px solid var(--line);border-radius:0;padding:.7rem .9rem;margin:.6rem 0;background:#fffdf8}
+.note-text{white-space:pre-wrap}
+.note-meta{display:flex;justify-content:space-between;align-items:center;margin-top:.5rem}
+
+/* ---------- print: hire one-pager ---------- */
+@media print{
+  .topbar,.nav,.foot,#hireDetail ~ *{display:none!important}
+  body{background:#fff}
+  body.print-hire .nav,body.print-hire .topbar,body.print-hire .foot{display:none!important}
+  body.print-hire #view-dashboard > .card:first-child,
+  body.print-hire #view-dashboard > .grid,
+  body.print-hire #hireDetail .form-row,
+  body.print-hire #hireDetail .note-add,
+  body.print-hire #hireDetail [data-delnote]{display:none!important}
+  body.print-hire #hireDetail .card{box-shadow:none;border:none}
+  body.print-hire .task{break-inside:avoid}
+}

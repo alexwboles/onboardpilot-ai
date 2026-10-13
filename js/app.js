@@ -73,8 +73,7 @@
       wireDashToolbar();
       return;
     }
-    const cards = rows.map((r, i) => {
-      const badges = (r.overdue ? `<span class="badge overdue">Day-1 items overdue</span>` : "") +
+    const cards = rows.map((r, i) => {      const badges = (r.overdue ? `<span class="badge overdue">Day-1 items overdue</span>` : "") +
         (r.progress.overall === 100 ? `<span class="badge done">✓ Complete</span>` : "");
       const initial = esc((r.name || "?").trim().charAt(0).toUpperCase());
       const hire = OP.getHire(state, r.id);
@@ -93,7 +92,13 @@
         </div>
       </div>`;
     }).join("");
-    v.innerHTML = toolbar + `<div class="grid">${cards}</div>` +
+    // Buddy check-in nudges: hires whose buddy tasks are open past due
+    const nudges = OP.buddyCheckins(state, new Date().toISOString().slice(0, 10));
+    const nudgePanel = nudges.length ? `<div class="card nudge-card"><h3>Buddy check-ins needed (${nudges.length})</h3>` +
+      nudges.map(n => `<div class="list-item nudge-item"><span>${esc(n.text)}<br>
+        <span class="muted small">Open: ${n.tasks.slice(0, 3).map(esc).join("; ")}${n.tasks.length > 3 ? ` +${n.tasks.length - 3} more` : ""}</span></span>
+        <button class="btn ghost" data-copynudge="${n.hireId}">Copy</button></div>`).join("") + `</div>` : "";
+    v.innerHTML = toolbar + nudgePanel + `<div class="grid">${cards}</div>` +
       (archived.length ? `<div class="card"><h3>Archived (${archived.length})</h3>` +
         archived.map(h => `<div class="list-item"><span><strong>${esc(h.name)}</strong> <span class="muted small">${esc(h.role)}</span></span>
           <button class="btn ghost" data-unarchive="${h.id}">Restore</button></div>`).join("") + `</div>` : "") +
@@ -103,6 +108,17 @@
       c.addEventListener("click", () => { selectedHireId = c.dataset.hire; renderHireDetail(); }));
     v.querySelectorAll("[data-unarchive]").forEach(b =>
       b.addEventListener("click", (e) => { e.stopPropagation(); OP.unarchiveHire(state, b.dataset.unarchive); save(); renderDashboard(); }));
+    v.querySelectorAll("[data-copynudge]").forEach(b =>
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const n = nudges.find(x => x.hireId === b.dataset.copynudge);
+        if (!n) return;
+        const txt = n.text + (n.tasks.length ? "\nOpen tasks: " + n.tasks.join("; ") : "");
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt);
+        else { const ta = document.createElement("textarea"); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+        b.textContent = "Copied";
+        setTimeout(() => { b.textContent = "Copy"; }, 1500);
+      }));
     if (selectedHireId) renderHireDetail();
   }
 
@@ -165,7 +181,9 @@
         html += `<div class="task${t.done ? " done" : ""}">
           <input type="checkbox" data-task="${t.id}"${t.done ? " checked" : ""}>
           <div><div class="t-title">${esc(t.title)}</div>
-          <div class="meta">${esc(t.category)} · ${esc(t.owner)}${t.guidance ? ` · <em>${esc(t.guidance)}</em>` : ""}</div></div></div>`;
+          <div class="meta">${esc(t.category)} · owner:
+            <select data-owner="${t.id}" class="owner-select">${OP.OWNER_OPTIONS.map(o =>
+              `<option value="${o}"${t.owner === o ? " selected" : ""}>${o}</option>`).join("")}</select>${t.guidance ? ` · <em>${esc(t.guidance)}</em>` : ""}</div></div></div>`;
       }
     }
     if (hasDoc) html = `<div class="doc-note"><strong>Document checklist note:</strong> items marked above are generic guidance only — not legal or tax advice. ${esc(OP.GENERIC_NOTE)}</div>` + html;
@@ -183,12 +201,34 @@
         <button class="btn ghost danger small" data-delnote="${n.id}">Delete</button></div></div>`).join("")
         : `<p class="muted small">No notes yet — log first impressions, 1:1 takeaways, anything worth remembering.</p>`}
     </div>`;
+    // first-30-day feedback pulse
+    const pulses = OP.hirePulses(state, hire.id);
+    const avg = OP.pulseAverage(pulses);
+    html += `<div class="notes-sect pulse-sect">
+      <h3>First-30-day pulse ${avg !== null ? `<span class="small muted">avg ${avg}/5 over ${pulses.length} check-in(s)</span>` : `<span class="small muted">no check-ins yet</span>`}</h3>
+      <div class="form-row">
+        <label class="small">Score (1–5):
+          <select id="pulseScore">${[5, 4, 3, 2, 1].map(s => `<option value="${s}">${s}</option>`).join("")}</select>
+        </label>
+        <input id="pulseNote" placeholder="How are they settling in? (optional)" maxlength="500" style="flex:1">
+        <button class="btn ghost" id="addPulseBtn">Log check-in</button>
+      </div>
+      ${pulses.length ? pulses.slice().reverse().map(p => `
+        <div class="note-item"><div class="note-text"><strong>${p.score}/5</strong>${p.note ? " — " + esc(p.note) : ""}</div>
+        <div class="note-meta"><span class="muted small">${esc(String(p.at).slice(0, 10))}</span></div></div>`).join("")
+        : `<p class="muted small">Log a quick pulse at day 7 and day 30 — a 1–5 "how's it going" you can trend later.</p>`}
+    </div>`;
     html += `</div>`;
     d.innerHTML = html;
     d.querySelectorAll("input[type=checkbox]").forEach(cb =>
       cb.addEventListener("change", () => {
         OP.setItemDone(state, hire.id, cb.dataset.task, cb.checked);
         save(); renderDashboard(); renderHireDetail();
+      }));
+    d.querySelectorAll("select[data-owner]").forEach(sel =>
+      sel.addEventListener("change", () => {
+        OP.setItemOwner(state, hire.id, sel.dataset.owner, sel.value);
+        save(); renderHireDetail();
       }));
     el("detailBuddy").addEventListener("change", e => {
       OP.assignBuddy(state, hire.id, e.target.value || null);
@@ -210,6 +250,12 @@
     el("addNoteBtn").addEventListener("click", () => {
       const v = el("noteText").value;
       if (!OP.addHireNote(state, hire.id, v)) { alert("Write the note first."); return; }
+      save(); renderHireDetail();
+    });
+    el("addPulseBtn").addEventListener("click", () => {
+      const s = el("pulseScore").value;
+      const n = el("pulseNote").value;
+      if (!OP.addHirePulse(state, hire.id, s, n)) { alert("Pick a score from 1 to 5."); return; }
       save(); renderHireDetail();
     });
     d.querySelectorAll("[data-delnote]").forEach(b =>

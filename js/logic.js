@@ -235,6 +235,78 @@
     t.doneAt = t.done ? new Date().toISOString() : null;
     return true;
   }
+
+  // ---- Task owner reassignment ------------------------------------------------
+  const OWNER_OPTIONS = ["New hire", "Buddy", "Manager"];
+
+  function setItemOwner(state, hireId, taskId, owner) {
+    const h = getHire(state, hireId);
+    if (!h || OWNER_OPTIONS.indexOf(owner) === -1) return false;
+    const t = h.checklist.find(x => x.id === taskId);
+    if (!t) return false;
+    t.owner = owner;
+    return true;
+  }
+
+  // ---- Buddy check-in reminders -----------------------------------------------
+  // Hires whose buddy-owned tasks are still open in a phase whose due date
+  // has passed. Returns plain-language nudge text per hire.
+  function buddyCheckins(state, todayStr) {
+    const out = [];
+    for (const h of (state.hires || [])) {
+      if (h.archived) continue;
+      const buddyName = getBuddyName(state, h.id);
+      if (!buddyName) continue;
+      const open = [];
+      for (const ph of PHASES) {
+        const due = phaseDueDate(h, ph);
+        if (!due || due >= todayStr) continue;
+        for (const t of h.checklist) {
+          if (t.phase === ph && !t.done && t.owner === "Buddy") open.push(t);
+        }
+      }
+      if (open.length) {
+        out.push({
+          hireId: h.id,
+          hireName: h.name,
+          buddyName: buddyName,
+          openCount: open.length,
+          tasks: open.map(t => t.title),
+          text: "Ask " + buddyName + " to check in with " + h.name + " — " +
+            open.length + " buddy task" + (open.length === 1 ? " is" : "s are") +
+            " still open past its due date."
+        });
+      }
+    }
+    return out;
+  }
+
+  // ---- First-30-day feedback pulse ---------------------------------------------
+  // score 1..5 + optional note (500 chars max), timestamped.
+  function addHirePulse(state, hireId, score, note) {
+    const h = getHire(state, hireId);
+    if (!h) return null;
+    const s = Math.round(Number(score));
+    if (!(s >= 1 && s <= 5)) return null;
+    const p = {
+      id: uid("pulse"),
+      score: s,
+      note: String(note || "").trim().slice(0, 500),
+      at: new Date().toISOString()
+    };
+    h.pulses = h.pulses || [];
+    h.pulses.push(p);
+    return p;
+  }
+  function hirePulses(state, hireId) {
+    const h = getHire(state, hireId);
+    if (!h || !h.pulses) return [];
+    return h.pulses.slice().sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  }
+  function pulseAverage(pulses) {
+    if (!pulses || !pulses.length) return null;
+    return Math.round((pulses.reduce((a, p) => a + p.score, 0) / pulses.length) * 10) / 10;
+  }
   function assignBuddy(state, hireId, buddyId) {
     const h = getHire(state, hireId);
     if (!h) return false;
@@ -525,17 +597,18 @@
   }
 
   const OnboardPilot = {
-    STORAGE_KEY, PHASES, PHASE_LABELS, CATEGORIES, GENERIC_NOTE,
+    STORAGE_KEY, PHASES, PHASE_LABELS, CATEGORIES, GENERIC_NOTE, OWNER_OPTIONS,
     ROLE_TEMPLATES, PHASE_DUE_OFFSETS,
     generateChecklist, buildTask,
     blankState, serialize, deserialize,
     addBuddy, removeBuddy,
-    addHire, getHire, removeHire, setItemDone, assignBuddy, getBuddyName,
+    addHire, getHire, removeHire, setItemDone, setItemOwner, assignBuddy, getBuddyName,
     progressFor, progressAll, countsFor, isOverdue, dashboard,
     daysToStart, startLabel, searchHires, sortHires, hiresToCSV,
     archiveHire, unarchiveHire, archivedHires,
     addHireNote, removeHireNote, hireNotes,
     phaseDueDate, milestoneStatus, nextMilestoneFor, upcomingMilestones, milestoneLabel,
+    buddyCheckins, addHirePulse, hirePulses, pulseAverage,
     createCustomRole, addCustomTask, removeCustomRole, allRoles,
     localWelcomeMessage, draftWelcomeMessage, openaiWelcomeMessage
   };

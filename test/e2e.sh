@@ -164,6 +164,27 @@ if (!OP.dashboard(st, '2026-09-28').some(r => r.id === h.id)) process.exit(1);
 console.log('ok');
 "
 
+# 11. Second sweep: buddy nudge -> owner reassign -> pulse -> resolve
+flow "nudge owner pulse end-to-end" "
+const OP = require('$LOGIC');
+const st = OP.blankState();
+const b = OP.addBuddy(st, 'Rosa', 'Senior');
+const h = OP.addHire(st, 'Nia', 'Line Cook', '2026-09-01', b.id);
+let nudges = OP.buddyCheckins(st, '2026-09-15');
+if (!nudges.length) process.exit(1);
+// manager takes over the overdue buddy tasks: reassign owner
+h.checklist.filter(t => t.owner === 'Buddy' && !t.done).forEach(t => {
+  if (!OP.setItemOwner(st, h.id, t.id, 'Manager')) process.exit(1);
+});
+if (OP.buddyCheckins(st, '2026-09-15').length) process.exit(1);
+// log a pulse and confirm it shows in the hire record
+OP.addHirePulse(st, h.id, 3, 'Slow start, watching closely');
+const ps = OP.hirePulses(st, h.id);
+if (ps.length !== 1 || ps[0].score !== 3) process.exit(1);
+if (OP.pulseAverage(ps) !== 3) process.exit(1);
+console.log('ok');
+"
+
 echo ""
 echo "e2e: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

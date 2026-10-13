@@ -226,6 +226,54 @@ console.log('ok');
 
 if grep -q 'printHireBtn' js/app.js && grep -q 'print-hire' css/style.css && grep -q 'notes-sect' js/app.js && grep -q 'milestoneLabel' js/app.js; then ok "hire print + notes + milestone UI wired"; else bad "hire print + notes + milestone UI wired"; fi
 
+# --- second sweep: owner reassignment, buddy nudges, feedback pulse ---
+if run "
+const OP = require('$LOGIC');
+const st = OP.blankState();
+const h = OP.addHire(st, 'Owner Test', 'Barista', '2026-09-28', null);
+const t = h.checklist[0];
+if (OP.setItemOwner(st, h.id, t.id, 'Nope')) process.exit(1);
+if (!OP.setItemOwner(st, h.id, t.id, 'New hire')) process.exit(1);
+if (t.owner !== 'New hire') process.exit(1);
+if (OP.setItemOwner(st, 'bogus', t.id, 'Buddy')) process.exit(1);
+if (OP.setItemOwner(st, h.id, 'bogus', 'Buddy')) process.exit(1);
+console.log('ok');
+" | grep -q ok; then ok "setItemOwner validates owner + ids"; else bad "setItemOwner validates owner + ids"; fi
+
+if run "
+const OP = require('$LOGIC');
+const st = OP.blankState();
+const b = OP.addBuddy(st, 'Sam Mentor', 'Lead');
+const h = OP.addHire(st, 'Nudge Me', 'Barista', '2026-09-01', b.id);
+const nudges = OP.buddyCheckins(st, '2026-09-15');
+if (nudges.length !== 1) { console.error('expected 1 nudge, got ' + nudges.length); process.exit(1); }
+const n = nudges[0];
+if (!n.text.includes('Sam Mentor') || !n.text.includes('Nudge Me')) process.exit(1);
+if (n.openCount < 1) process.exit(1);
+// completing all buddy tasks clears the nudge
+h.checklist.filter(t => t.owner === 'Buddy').forEach(t => OP.setItemDone(st, h.id, t.id, true));
+if (OP.buddyCheckins(st, '2026-09-15').length) process.exit(1);
+console.log('ok');
+" | grep -q ok; then ok "buddyCheckins flags overdue buddy tasks"; else bad "buddyCheckins flags overdue buddy tasks"; fi
+
+if run "
+const OP = require('$LOGIC');
+const st = OP.blankState();
+const h = OP.addHire(st, 'Pulse', 'Barista', '2026-09-28', null);
+if (!OP.addHirePulse(st, h.id, 4, 'Settling in well')) process.exit(1);
+if (OP.addHirePulse(st, h.id, 6, 'x')) process.exit(1);
+if (OP.addHirePulse(st, h.id, 0, 'x')) process.exit(1);
+if (!OP.addHirePulse(st, h.id, 5, '')) process.exit(1);
+const ps = OP.hirePulses(st, h.id);
+if (ps.length !== 2 || OP.pulseAverage(ps) !== 4.5) process.exit(1);
+// pulses survive a serialize round-trip
+const st2 = OP.deserialize(OP.serialize(st));
+if (OP.hirePulses(st2, h.id).length !== 2) process.exit(1);
+console.log('ok');
+" | grep -q ok; then ok "feedback pulse add/avg/persist"; else bad "feedback pulse add/avg/persist"; fi
+
+if grep -q 'data-copynudge' js/app.js && grep -q 'owner-select' js/app.js && grep -q 'pulseScore' js/app.js && grep -q 'addPulseBtn' js/app.js; then ok "nudge + owner + pulse UI wired"; else bad "nudge + owner + pulse UI wired"; fi
+
 echo ""
 echo "smoke: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

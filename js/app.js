@@ -73,7 +73,9 @@
       wireDashToolbar();
       return;
     }
-    const cards = rows.map((r, i) => {      const badges = (r.overdue ? `<span class="badge overdue">Day-1 items overdue</span>` : "") +
+    const cards = rows.map((r, i) => {      const pct = r.progress.overall;
+      const arc = (pct / 100 * 138.2).toFixed(1);
+      const badges = (r.overdue ? `<span class="badge overdue">${r.overdueCount || "Tasks"} overdue</span>` : "") +
         (r.progress.overall === 100 ? `<span class="badge done">✓ Complete</span>` : "");
       const initial = esc((r.name || "?").trim().charAt(0).toUpperCase());
       const hire = OP.getHire(state, r.id);
@@ -81,15 +83,24 @@
       const msLine = r.nextMilestone && r.nextMilestone.dueDate
         ? `<div class="small milestone${r.nextMilestone.state === "overdue" ? " over" : ""}">${esc(OP.milestoneLabel(r.nextMilestone))}</div>`
         : "";
+      const minis = OP.PHASES.map(p =>
+        `<span class="mini" title="${esc(OP.PHASE_LABELS[p])}: ${r.progress[p]}%"><i style="width:${r.progress[p]}%"></i></span>`).join("");
       return `<div class="card hire-card" data-hire="${r.id}" style="animation-delay:${Math.min(i * 50, 300)}ms">
-        <div class="bp-stub"><div class="bp-avatar">${initial}</div><div class="bp-name">${esc(r.name)}</div></div>
-        <div class="bp-body">
-          <h3>${esc(r.role)}</h3>
-          <div class="small muted">started ${esc(r.startDate || "—")} · ${esc(start)} · buddy: ${esc(r.buddy || "—")}</div>
-          ${msLine}
-          <div class="bar"><div style="width:${r.progress.overall}%"></div></div>
-          <div class="bp-status"><span class="small">Overall <strong>${r.progress.overall}%</strong></span> ${badges}</div>
+        <div class="hc-top">
+          <div class="bp-avatar" aria-hidden="true">${initial}</div>
+          <div class="hc-id"><div class="bp-name">${esc(r.name)}</div><div class="small muted">${esc(r.role)}</div></div>
+          <div class="ring" role="img" aria-label="${pct}% complete">
+            <svg viewBox="0 0 56 56" width="60" height="60" aria-hidden="true">
+              <circle cx="28" cy="28" r="22" class="ring-track"/>
+              <circle cx="28" cy="28" r="22" class="ring-fill" stroke-dasharray="${arc} 138.2" transform="rotate(-90 28 28)"/>
+              <text x="28" y="34" text-anchor="middle" class="ring-num">${pct}</text>
+            </svg>
+          </div>
         </div>
+        <div class="small muted">started ${esc(r.startDate || "—")} · ${esc(start)} · buddy: ${esc(r.buddy || "—")}</div>
+        ${msLine}
+        <div class="minis" aria-hidden="true">${minis}</div>
+        <div class="bp-status">${badges}</div>
       </div>`;
     }).join("");
     // Buddy check-in nudges: hires whose buddy tasks are open past due
@@ -178,12 +189,15 @@
       const items = hire.checklist.filter(t => t.phase === ph);
       for (const t of items) {
         if (t.doc) hasDoc = true;
-        html += `<div class="task${t.done ? " done" : ""}">
+        const due = OP.taskDue(hire, t);
+        const od = OP.taskOverdue(hire, t);
+        html += `<div class="task${t.done ? " done" : ""}${od ? " od" : ""}">
           <input type="checkbox" data-task="${t.id}"${t.done ? " checked" : ""}>
-          <div><div class="t-title">${esc(t.title)}</div>
-          <div class="meta">${esc(t.category)} · owner:
-            <select data-owner="${t.id}" class="owner-select">${OP.OWNER_OPTIONS.map(o =>
-              `<option value="${o}"${t.owner === o ? " selected" : ""}>${o}</option>`).join("")}</select>${t.guidance ? ` · <em>${esc(t.guidance)}</em>` : ""}</div></div></div>`;
+          <div class="t-main"><div class="t-title">${esc(t.title)}${od ? ` <span class="badge overdue">overdue</span>` : ""}</div>
+          <div class="meta"><span class="due-chip${od ? " od" : ""}">${due ? "Due " + esc(due) : "No due date"}</span>
+            <select data-owner="${t.id}" class="owner-select" aria-label="Task owner">${OP.OWNER_OPTIONS.map(o =>
+              `<option value="${o}"${t.owner === o ? " selected" : ""}>${o}</option>`).join("")}</select>
+            <span class="t-cat">${esc(t.category)}</span>${t.guidance ? ` · <em>${esc(t.guidance)}</em>` : ""}</div></div></div>`;
       }
     }
     if (hasDoc) html = `<div class="doc-note"><strong>Document checklist note:</strong> items marked above are generic guidance only — not legal or tax advice. ${esc(OP.GENERIC_NOTE)}</div>` + html;

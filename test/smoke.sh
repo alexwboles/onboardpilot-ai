@@ -274,6 +274,31 @@ console.log('ok');
 
 if grep -q 'data-copynudge' js/app.js && grep -q 'owner-select' js/app.js && grep -q 'pulseScore' js/app.js && grep -q 'addPulseBtn' js/app.js; then ok "nudge + owner + pulse UI wired"; else bad "nudge + owner + pulse UI wired"; fi
 
+if grep -q 'class="shell"' index.html && grep -q 'local-pill' index.html; then ok "index.html uses sidebar shell"; else bad "index.html missing shell"; fi
+
+if grep -q 'ring-fill' js/app.js && grep -q 'due-chip' js/app.js && grep -q 'taskDue' js/app.js; then ok "app.js wires progress ring + due chips"; else bad "app.js missing redesign wiring"; fi
+
+if ! grep -E 'border-radius:[[:space:]]*[1-9]' css/style.css | grep -qv '50%'; then ok "no rounded edges in CSS"; else bad "rounded edges found in CSS"; fi
+
+node -e "
+var OP = require('./js/logic.js');
+['taskDue','taskOverdue','overdueTasks'].forEach(function(f){ if(typeof OP[f]!=='function') throw new Error('missing '+f); });
+var st = OP.blankState();
+var h = OP.addHire(st, 'Testy McTest', 'Retail Associate', '2026-01-05', null);
+if (!h) throw new Error('addHire failed');
+var t = h.checklist.find(function(x){ return x.phase === 'day1'; });
+if (OP.taskDue(h, t) !== '2026-01-06') throw new Error('day1 due should be start+1, got ' + OP.taskDue(h, t));
+var t30 = h.checklist.find(function(x){ return x.phase === 'day30'; });
+if (OP.taskDue(h, t30) !== '2026-02-04') throw new Error('day30 due should be start+30, got ' + OP.taskDue(h, t30));
+if (!OP.taskOverdue(h, t, '2026-02-01')) throw new Error('day1 task should be overdue on 2026-02-01');
+if (OP.taskOverdue(h, t30, '2026-02-01')) throw new Error('day30 task should NOT be overdue on 2026-02-01');
+var od = OP.overdueTasks(h, '2026-02-01');
+if (!od.length) throw new Error('overdueTasks empty');
+var dash = OP.dashboard(st, '2026-02-01').find(function(r){ return r.id === h.id; });
+if (!dash || dash.overdueCount !== od.length) throw new Error('dashboard overdueCount mismatch');
+console.log('ok');
+" | grep -q ok; if [ $? -eq 0 ]; then ok "per-task due dates + overdue detection work"; else bad "taskDue/taskOverdue/overdueTasks failed"; fi
+
 echo ""
 echo "smoke: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

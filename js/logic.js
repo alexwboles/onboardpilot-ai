@@ -379,6 +379,7 @@
       buddy: getBuddyName(state, h.id),
       progress: progressAll(h),
       overdue: isOverdue(h, todayStr),
+      overdueCount: overdueTasks(h, todayStr).length,
       startIn: daysToStart(h, todayStr),
       nextMilestone: nextMilestoneFor(h, todayStr)
     }));
@@ -562,6 +563,30 @@
     if (m.daysLeft > 1) return m.label + " due in " + m.daysLeft + " days";
     return m.label + " overdue by " + Math.abs(m.daysLeft) + " day" + (Math.abs(m.daysLeft) === 1 ? "" : "s");
   }
+
+  // Per-task due date: every task inherits its phase's milestone due date
+  // (BambooHR-style: Day 1 → start+1, Week 1 → start+7, Day 30 → start+30).
+  function taskDue(hire, task) {
+    if (!hire || !task) return null;
+    return phaseDueDate(hire, task.phase);
+  }
+
+  // A task is overdue when its due date has passed and it isn't done.
+  function taskOverdue(hire, task, todayStr) {
+    if (!task || task.done) return false;
+    const due = taskDue(hire, task);
+    if (!due) return false;
+    const today = todayStr || new Date().toISOString().slice(0, 10);
+    return due < today;
+  }
+
+  // All overdue tasks for a hire, soonest-due first.
+  function overdueTasks(hire, todayStr) {
+    if (!hire || !Array.isArray(hire.checklist)) return [];
+    const out = hire.checklist.filter(t => taskOverdue(hire, t, todayStr));
+    out.sort((a, b) => String(taskDue(hire, a) || "").localeCompare(String(taskDue(hire, b) || "")));
+    return out;
+  }
   function localWelcomeMessage(hire, buddyName) {
     const parts = [
       "Welcome to the team, " + hire.name + "!",
@@ -608,6 +633,7 @@
     archiveHire, unarchiveHire, archivedHires,
     addHireNote, removeHireNote, hireNotes,
     phaseDueDate, milestoneStatus, nextMilestoneFor, upcomingMilestones, milestoneLabel,
+    taskDue, taskOverdue, overdueTasks,
     buddyCheckins, addHirePulse, hirePulses, pulseAverage,
     createCustomRole, addCustomTask, removeCustomRole, allRoles,
     localWelcomeMessage, draftWelcomeMessage, openaiWelcomeMessage

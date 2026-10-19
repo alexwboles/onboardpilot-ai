@@ -7,6 +7,15 @@ pass=0; fail=0
 ok()  { pass=$((pass+1)); echo "PASS: $1"; }
 bad() { fail=$((fail+1)); echo "FAIL: $1"; }
 
+# --- iframe-safety: localStorage access guarded in try/catch ---
+if grep -q 'try {' js/app.js && \
+   grep -q 'const raw = localStorage.getItem' js/app.js && \
+   grep -q 'try { localStorage.setItem' js/app.js; then
+  ok "localStorage get/set wrapped in try/catch (iframe-safe)"
+else
+  bad "localStorage get/set wrapped in try/catch (iframe-safe)"
+fi
+
 # --- files exist (5) ---
 for f in index.html css/style.css js/logic.js js/app.js README.md; do
   if [ -f "$f" ]; then ok "file exists: $f"; else bad "file exists: $f"; fi

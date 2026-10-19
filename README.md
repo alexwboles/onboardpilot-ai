@@ -1,3 +1,7 @@
+> **This project has been merged into hirewise-ai — active development continues at https://github.com/alexwboles/hirewise-ai**
+>
+> On 2026-10-19 OnboardPilot AI was merged into HireWise AI as its new **Onboard** tab (portfolio consolidation, merge #8). All features — 6 role templates, Day 1 / Week 1 / Day 30 checklists, buddies, custom roles, milestones, welcome drafts, notes, CSV export — now live in hirewise-ai, with a one-click "Start onboarding" handoff from any hired pipeline candidate. This repo is archived read-only; browser data under the `onboardpilot_v1` localStorage key is picked up automatically by hirewise-ai.
+
 # OnboardPilot AI ✈️
 
 Employee onboarding checklists for small businesses. Pick a role, add a new hire, and get a ready-made Day 1 / Week 1 / Day 30 checklist — track progress, assign a buddy, and draft a welcome message.
